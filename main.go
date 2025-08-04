@@ -37,7 +37,7 @@ var (
 )
 
 func main() {
-	// 解析配置获取Web设置 (移到前面, 确保路由使用正确的IP和端口)
+	// 解析配置获取Web设置
 	parseConfigForWebSettings()
 
 	r := gin.Default()
@@ -66,7 +66,7 @@ func main() {
 	log.Fatal(r.Run(addr))
 }
 
-// 新增: 获取统计信息
+// 获取统计信息
 func getStatsHandler(c *gin.Context) {
 	// 统计日志行数 (保护次数)
 	protectionCount, err := countLogLines()
@@ -323,6 +323,7 @@ func updateConfigFile(newConfig map[string]interface{}) error {
 	}
 	lines := strings.Split(string(content), "\n")
 
+	// 更新基本配置项
 	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
@@ -333,9 +334,11 @@ func updateConfigFile(newConfig map[string]interface{}) error {
 			parts := strings.SplitN(trimmed, "=", 2)
 			key := strings.TrimSpace(parts[0])
 
-			if basic, ok := newConfig["basic"].(map[string]string); ok {
+			if basic, ok := newConfig["basic"].(map[string]interface{}); ok {
 				if newValue, ok := basic[key]; ok {
-					lines[i] = fmt.Sprintf("%s=%s", key, newValue)
+					// 确保值转换为字符串
+					valueStr := fmt.Sprintf("%v", newValue)
+					lines[i] = fmt.Sprintf("%s=%s", key, valueStr)
 				}
 			}
 		}
@@ -354,15 +357,17 @@ func updateConfigFile(newConfig map[string]interface{}) error {
 			commandStart = i
 		}
 
-		if protectedStart != -1 && protectedEnd == -1 && strings.Contains(trimmed, "#---------------------") {
+		// 查找下一个分隔符作为结束位置
+		if protectedStart != -1 && protectedEnd == -1 && i > protectedStart && strings.HasPrefix(trimmed, "#---------------------") {
 			protectedEnd = i
 		}
 
-		if commandStart != -1 && commandEnd == -1 && strings.Contains(trimmed, "#---------------------") {
+		if commandStart != -1 && commandEnd == -1 && i > commandStart && strings.HasPrefix(trimmed, "#---------------------") {
 			commandEnd = i
 		}
 	}
 
+	// 更新受保护路径部分
 	if protectedStart != -1 && protectedEnd != -1 {
 		newProtected := []string{}
 		if paths, ok := newConfig["protected_paths"].([]interface{}); ok {
@@ -373,13 +378,16 @@ func updateConfigFile(newConfig map[string]interface{}) error {
 			}
 		}
 
+		// 替换整个部分
 		newSection := []string{lines[protectedStart]}
 		newSection = append(newSection, newProtected...)
 		newSection = append(newSection, lines[protectedEnd])
 
+		// 重建行切片 - 修复语法错误
 		lines = append(lines[:protectedStart], append(newSection, lines[protectedEnd+1:]...)...)
 	}
 
+	// 更新命令规则部分
 	if commandStart != -1 && commandEnd != -1 {
 		newRules := []string{}
 		if rules, ok := newConfig["command_rules"].([]interface{}); ok {
@@ -390,13 +398,16 @@ func updateConfigFile(newConfig map[string]interface{}) error {
 			}
 		}
 
+		// 替换整个部分
 		newSection := []string{lines[commandStart]}
 		newSection = append(newSection, newRules...)
 		newSection = append(newSection, lines[commandEnd])
 
+		// 重建行切片 - 修复语法错误
 		lines = append(lines[:commandStart], append(newSection, lines[commandEnd+1:]...)...)
 	}
 
+	// 写入更新后的配置
 	return os.WriteFile(ConfigPath, []byte(strings.Join(lines, "\n")), 0644)
 }
 
@@ -405,8 +416,28 @@ func logStreamHandler(c *gin.Context) {
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
+	c.Writer.Flush()
 
-	var lastPos int64 = 0
+	// 打开日志文件
+	file, err := os.Open(LogPath)
+	if err != nil {
+		c.SSEvent("error", fmt.Sprintf("Error opening log file: %v", err))
+		return
+	}
+	defer file.Close()
+
+	// 1. 发送完整的历史日志
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		c.SSEvent("log", scanner.Text())
+		c.Writer.Flush()
+	}
+
+	// 获取当前文件位置（文件末尾）
+	lastPos, _ := file.Seek(0, io.SeekCurrent)
+	lastSize := lastPos
+
+	// 使用ticker定期检查新日志
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -417,28 +448,59 @@ func logStreamHandler(c *gin.Context) {
 		case <-clientGone:
 			return
 		case <-ticker.C:
-			file, err := os.Open(LogPath)
+			// 检查文件是否有新内容
+			fileInfo, err := os.Stat(LogPath)
 			if err != nil {
-				c.SSEvent("error", fmt.Sprintf("Error opening log file: %v", err))
+				c.SSEvent("error", fmt.Sprintf("Error getting file info: %v", err))
 				continue
 			}
 
-			_, err = file.Seek(lastPos, 0)
-			if err != nil {
+			currentSize := fileInfo.Size()
+			if currentSize < lastSize {
+				// 文件被截断或轮转，重置位置并重新发送完整日志
+				lastPos = 0
+				lastSize = currentSize
+
+				// 重新打开文件读取完整内容
 				file.Close()
+				file, err = os.Open(LogPath)
+				if err != nil {
+					c.SSEvent("error", fmt.Sprintf("Error reopening log file: %v", err))
+					return
+				}
+
+				scanner = bufio.NewScanner(file)
+				for scanner.Scan() {
+					c.SSEvent("log", scanner.Text())
+					c.Writer.Flush()
+				}
+				lastPos, _ = file.Seek(0, io.SeekCurrent)
+				lastSize = lastPos
 				continue
 			}
 
-			scanner := bufio.NewScanner(file)
+			if currentSize <= lastPos {
+				// 没有新内容
+				continue
+			}
+
+			// 读取新内容
+			_, err = file.Seek(lastPos, io.SeekStart)
+			if err != nil {
+				c.SSEvent("error", fmt.Sprintf("Error seeking file: %v", err))
+				continue
+			}
+
+			scanner = bufio.NewScanner(file)
 			for scanner.Scan() {
 				c.SSEvent("log", scanner.Text())
 				c.Writer.Flush()
 			}
 
+			// 更新位置
 			newPos, _ := file.Seek(0, io.SeekCurrent)
 			lastPos = newPos
-
-			file.Close()
+			lastSize = currentSize
 		}
 	}
 }
