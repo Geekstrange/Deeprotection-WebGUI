@@ -221,16 +221,83 @@ document.addEventListener('DOMContentLoaded', function() {
     function loadRulesToForm(config) {
         if (!config) return;
 
-        const protectedPaths = document.getElementById('protected-paths');
-        const commandRules = document.getElementById('command-rules');
+        // 清空现有表格数据
+        document.getElementById('protectedPathsBody').innerHTML = '';
+        document.getElementById('commandRulesBody').innerHTML = '';
 
+        // 加载保护路径
         if (config.protected_paths) {
-            protectedPaths.value = config.protected_paths.join('\n');
+            config.protected_paths.forEach((path, index) => {
+                if (!path) return;
+
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                <td class="number-cell">${index + 1}.</td>
+                <td class="path-cell">
+                    <input type="text" class="path-input confirmed" value="${path}" readonly>
+                </td>
+                <td class="action-cell">
+                    <button class="action-btn remove-btn">Remove</button>
+                </td>
+            `;
+                document.getElementById('protectedPathsBody').appendChild(row);
+            });
         }
 
+        // 添加一个空行用于新输入
+        const emptyPathRow = document.createElement('tr');
+        emptyPathRow.innerHTML = `
+        <td class="number-cell">${(config.protected_paths?.length || 0) + 1}.</td>
+        <td class="path-cell">
+            <input type="text" class="path-input" placeholder="Enter a path rule">
+        </td>
+        <td class="action-cell">
+            <button class="action-btn add-btn">Add</button>
+        </td>
+    `;
+        document.getElementById('protectedPathsBody').appendChild(emptyPathRow);
+        initProtectedPathsTable();
+
+        // 加载命令拦截规则
         if (config.command_rules) {
-            commandRules.value = config.command_rules.join('\n');
+            config.command_rules.forEach((rule, index) => {
+                if (!rule) return;
+
+                const [original, replacement] = rule.split('>').map(s => s.trim());
+
+                const row = document.createElement('tr');
+                row.classList.add('confirmed');
+                row.innerHTML = `
+                <td>${index + 1}</td>
+                <td>
+                    <input type="text" class="original-input" value="${original || ''}" readonly>
+                </td>
+                <td class="arrow-cell">></td>
+                <td><input type="text" class="replace-input" value="${replacement || ''}" readonly></td>
+                <td class="action-cell">
+                    <button class="remove-btn">Remove</button>
+                </td>
+            `;
+                document.getElementById('commandRulesBody').appendChild(row);
+            });
         }
+
+        // 添加一个空行用于新输入
+        const emptyCommandRow = document.createElement('tr');
+        emptyCommandRow.innerHTML = `
+        <td>${(config.command_rules?.length || 0) + 1}</td>
+        <td>
+            <input type="text" class="original-input" placeholder="Original">
+            <div class="error-message">Original cannot be empty</div>
+        </td>
+        <td class="arrow-cell">></td>
+        <td><input type="text" class="replace-input" placeholder="Replace"></td>
+        <td class="action-cell">
+            <button class="add-btn">Add</button>
+        </td>
+    `;
+        document.getElementById('commandRulesBody').appendChild(emptyCommandRow);
+        initCommandRulesTable();
     }
 
     function populateLanguageSelect(languages) {
@@ -445,60 +512,35 @@ document.addEventListener('DOMContentLoaded', function() {
     // 初始化命令拦截规则表格
     function initCommandRulesTable() {
         const tableBody = document.getElementById('commandRulesBody');
-        let rowCount = 1;
 
-        // 设置行事件处理
-        function setupRowEvents(row) {
-            const originalInput = row.querySelector('.original-input');
-            const replaceInput = row.querySelector('.replace-input');
-            const button = row.querySelector('button');
-            const errorMessage = row.querySelector('.error-message');
-
-            // 按钮点击事件处理
-            button.addEventListener('click', function() {
-                if (button.classList.contains('add-btn')) {
-                    // 处理Add操作
-                    if (!originalInput.value.trim()) {
-                        originalInput.classList.add('original-required');
-                        errorMessage.style.display = 'block';
-                        return;
-                    }
-
-                    // 锁定输入框样式
-                    row.classList.add('confirmed');
-                    originalInput.readOnly = true;
-                    replaceInput.readOnly = true;
-
-                    // 变为Remove按钮
-                    button.classList.remove('add-btn');
-                    button.classList.add('remove-btn');
-                    button.textContent = 'Remove';
-
-                    // 添加新行
-                    addNewEmptyRow();
-                } else {
-                    // 处理Remove操作
-                    row.remove();
-                    updateRowNumbers();
-                }
-            });
-
-            // 输入验证
-            originalInput.addEventListener('input', function() {
-                if (this.value.trim()) {
-                    this.classList.remove('original-required');
-                    errorMessage.style.display = 'none';
+        // 重排行号
+        function updateRowNumbers() {
+            const rows = tableBody.querySelectorAll('tr');
+            rows.forEach((row, idx) => {
+                const numCell = row.querySelector('td');
+                if (numCell) {
+                    numCell.textContent = idx + 1;
                 }
             });
         }
 
-        // 创建新的空行
-        function addNewEmptyRow() {
-            const newRow = document.createElement('tr');
-            rowCount++;
+        // 检查是否存在空白 (即还没添加的)行
+        function hasEmptyCommandRow() {
+            const rows = tableBody.querySelectorAll('tr');
+            for (const row of rows) {
+                if (!row.classList.contains('confirmed')) {
+                    return true;
+                }
+            }
+            return false;
+        }
 
-            newRow.innerHTML = `
-            <td>${rowCount}</td>
+        // 创建并绑定一个新的空行
+        function addEmptyRow() {
+            const index = tableBody.querySelectorAll('tr').length + 1;
+            const row = document.createElement('tr');
+            row.innerHTML = `
+            <td>${index}</td>
             <td>
                 <input type="text" class="original-input" placeholder="Original">
                 <div class="error-message">Original cannot be empty</div>
@@ -509,25 +551,67 @@ document.addEventListener('DOMContentLoaded', function() {
                 <button class="add-btn">Add</button>
             </td>
         `;
-
-            tableBody.appendChild(newRow);
-            setupRowEvents(newRow);
+            tableBody.appendChild(row);
+            setupRowEvents(row);
         }
 
-        // 更新行号函数
-        function updateRowNumbers() {
-            const rows = tableBody.querySelectorAll('tr');
-            rowCount = rows.length;
+        // 设置单行事件
+        function setupRowEvents(row) {
+            const originalInput = row.querySelector('.original-input');
+            const replaceInput = row.querySelector('.replace-input');
+            const button = row.querySelector('button');
+            const errorMessage = row.querySelector('.error-message');
 
-            rows.forEach((row, index) => {
-                row.cells[0].textContent = index + 1;
+            // 按钮点击事件处理 (Add / Remove)
+            button.addEventListener('click', function () {
+                if (button.classList.contains('add-btn')) {
+                    // Add 操作
+                    if (!originalInput.value.trim()) {
+                        originalInput.classList.add('original-required');
+                        errorMessage.style.display = 'block';
+                        return;
+                    }
+
+                    // 锁定输入框并标记已确认
+                    row.classList.add('confirmed');
+                    originalInput.readOnly = true;
+                    replaceInput.readOnly = true;
+
+                    // 替换按钮状态
+                    button.classList.remove('add-btn');
+                    button.classList.add('remove-btn');
+                    button.textContent = 'Remove';
+
+                    // 添加新空行 (如果当前已经没有空行)
+                    if (!hasEmptyCommandRow()) {
+                        addEmptyRow();
+                    }
+                } else {
+                    // Remove 操作
+                    row.remove();
+                    updateRowNumbers();
+                    if (!hasEmptyCommandRow()) {
+                        addEmptyRow();
+                    }
+                }
+            });
+
+            // 输入变化处理: 仅用于清除错误样式
+            originalInput.addEventListener('input', function () {
+                if (this.value.trim()) {
+                    this.classList.remove('original-required');
+                    errorMessage.style.display = 'none';
+                }
             });
         }
 
-        // 设置初始行的监听器
-        const initialRow = tableBody.querySelector('tr');
-        if (initialRow) {
-            setupRowEvents(initialRow);
+        // 初始化已有行 (包括历史加载的 confirmed 规则)和确保有一个空行
+        const existingRows = tableBody.querySelectorAll('tr');
+        existingRows.forEach(r => {
+            setupRowEvents(r);
+        });
+        if (!hasEmptyCommandRow()) {
+            addEmptyRow();
         }
     }
 
@@ -556,95 +640,15 @@ document.addEventListener('DOMContentLoaded', function() {
             const replaceInput = row.querySelector('.replace-input');
 
             if (originalInput && originalInput.value.trim()) {
-                const rule = `${originalInput.value.trim()} > ${replaceInput.value.trim() || originalInput.value.trim()}`;
+                const original = originalInput.value.trim();
+                const replacement = replaceInput.value.trim();
+                // If replacement is empty, use '>' without duplicating original
+                const rule = replacement ? `${original} > ${replacement}` : `${original} >`;
                 rules.push(rule);
             }
         });
 
         return rules;
-    }
-
-    // 加载规则到表格
-    function loadRulesToForm(config) {
-        if (!config) return;
-
-        // 清空现有表格数据
-        document.getElementById('protectedPathsBody').innerHTML = '';
-        document.getElementById('commandRulesBody').innerHTML = '';
-
-        // 加载保护路径
-        if (config.protected_paths) {
-            config.protected_paths.forEach((path, index) => {
-                if (!path) return;
-
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                <td class="number-cell">${index + 1}.</td>
-                <td class="path-cell">
-                    <input type="text" class="path-input confirmed" value="${path}" readonly>
-                </td>
-                <td class="action-cell">
-                    <button class="action-btn remove-btn">Remove</button>
-                </td>
-            `;
-                document.getElementById('protectedPathsBody').appendChild(row);
-            });
-        }
-
-        // 添加一个空行用于新输入
-        const emptyPathRow = document.createElement('tr');
-        emptyPathRow.innerHTML = `
-        <td class="number-cell">${(config.protected_paths?.length || 0) + 1}.</td>
-        <td class="path-cell">
-            <input type="text" class="path-input" placeholder="Enter a path rule">
-        </td>
-        <td class="action-cell">
-            <button class="action-btn add-btn">Add</button>
-        </td>
-    `;
-        document.getElementById('protectedPathsBody').appendChild(emptyPathRow);
-        initProtectedPathsTable();
-
-        // 加载命令拦截规则
-        if (config.command_rules) {
-            config.command_rules.forEach((rule, index) => {
-                if (!rule) return;
-
-                const [original, replacement] = rule.split('>').map(s => s.trim());
-
-                const row = document.createElement('tr');
-                row.classList.add('confirmed');
-                row.innerHTML = `
-                <td>${index + 1}</td>
-                <td>
-                    <input type="text" class="original-input" value="${original || ''}" readonly>
-                </td>
-                <td class="arrow-cell">></td>
-                <td><input type="text" class="replace-input" value="${replacement || ''}" readonly></td>
-                <td class="action-cell">
-                    <button class="remove-btn">Remove</button>
-                </td>
-            `;
-                document.getElementById('commandRulesBody').appendChild(row);
-            });
-        }
-
-        // 添加一个空行用于新输入
-        const emptyCommandRow = document.createElement('tr');
-        emptyCommandRow.innerHTML = `
-        <td>${(config.command_rules?.length || 0) + 1}</td>
-        <td>
-            <input type="text" class="original-input" placeholder="Original">
-            <div class="error-message">Original cannot be empty</div>
-        </td>
-        <td class="arrow-cell">></td>
-        <td><input type="text" class="replace-input" placeholder="Replace"></td>
-        <td class="action-cell">
-            <button class="add-btn">Add</button>
-        </td>
-    `;
-        document.getElementById('commandRulesBody').appendChild(emptyCommandRow);
-        initCommandRulesTable();
     }
 
     // 日志页面初始化
