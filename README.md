@@ -1,35 +1,45 @@
 # Deeprotection WebGUI
 
-Deeprotection WebGUI 是一个用于管理Deeprotection的 web 界面工具, 提供了直观的操作界面来配置保护规则、查看系统状态和日志等功能
+Permalink: Deeprotection WebGUI
 
-## 功能特点
+Deeprotection WebGUI is a web interface tool for managing Deeprotection. It offers an intuitive interface for configuring protection rules, viewing system status and logs, etc.
 
-- **系统概览**: 展示保护状态、过期时间、保护次数等关键信息
-- **配置管理**: 可设置语言、保护开关、自动更新等基础配置
-- **规则管理**: 管理受保护路径和命令拦截规则
-- **日志查看**: 实时查看系统保护日志
-- **终端工具**: 执行系统命令进行调试和管理
+## Features
 
-5. 打开浏览器访问 `http://127.0.0.1:8080` (默认地址, 可在配置中修改)
+Permalink: Features
 
-## 配置文件
+- **System Overview**: Displays key info like protection status, expiration time, and protection count.
+- **Configuration Management**: Set basic configurations like language, protection switch, and auto-update.
+- **Rule Management**: Manage protected paths and command interception rules.
+- **Log Viewing**: View system protection logs in real time.
+- **Terminal Tool**: Execute system commands for debugging and management.
 
-配置文件位于 `/etc/deeprotection/deeprotection.conf`, 包含以下主要配置项:
+5. Open a browser and visit `http://127.0.0.1:8080` (default address, modifiable in settings).
 
-- `web_ip`: web 服务绑定的 IP 地址
-- `web_port`: web 服务监听的端口
-- `language`: 界面语言设置
-- `disable`: 是否禁用保护功能
-- `expire_hours`: 保护禁用的过期时间 (小时)
-- `update`: 是否开启自动更新
-- `mode`: 保护模式 (Permissive/Enhanced)
+## Configuration File
 
-此外, 配置文件中还包含受保护路径列表和命令拦截规则
+Permalink: Configuration File
 
-## 日志
+The configuration file is located at `/etc/deeprotection/deeprotection.conf` and includes:
 
-系统日志存储在 `/var/log/deeprotection.log`, 可通过 web 界面的 "Logs" 页面实时查看
+- `web_ip`: The IP address the web service binds to.
+- `web_port`: The port the web service listens on.
+- `language`: UI language setting.
+- `disable`: Whether to disable protection.
+- `expire_hours`: Protection disable expiration time (in hours).
+- `update`: Whether to enable auto-update.
+- `mode`: Protection mode (Permissive/Enhanced).
 
-## 许可证
+It also contains the list of protected paths and command interception rules.
 
-本项目采用 Apache License 2.0 许可证, 详情参见 [LICENSE](https://github.com/Geekstrange/Deeprotection-WebGUI/blob/main/LICENSE) 文件
+## Logs
+
+Permalink: Logs
+
+System logs are stored in `/var/log/deeprotection.log` and can be viewed in real time via the "Logs" page in the web interface.
+
+## License
+
+Permalink: License
+
+This project is under the Apache License 2.0. See the [LICENSE](https://github.com/Geekstrange/Deeprotection-WebGUI?tab=Apache-2.0-1-ov-file) file for details.
