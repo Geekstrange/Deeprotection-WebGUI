@@ -1,6 +1,7 @@
 package main
 
 import (
+	"embed"
 	"bufio"
 	"fmt"
 	"io"
@@ -18,6 +19,10 @@ import (
 	"github.com/gin-contrib/static"
 )
 
+// 嵌入整个 public
+//go:embed public/*
+var staticFS embed.FS
+
 const (
 	ConfigPath     = "/etc/deeprotection/deeprotection.conf"
 	LogPath        = "/var/log/deeprotection.log"
@@ -32,15 +37,22 @@ var (
 )
 
 func main() {
+	// 解析配置获取Web设置 (移到前面, 确保路由使用正确的IP和端口)
 	parseConfigForWebSettings()
 
 	r := gin.Default()
-	r.Use(static.Serve("/", static.LocalFile("./public", true)))
+
+	// 正确处理EmbedFolder的返回值
+	staticFS, err := static.EmbedFolder(staticFS, "public")
+	if err != nil {
+		log.Fatalf("Failed to create embed folder: %v", err)
+	}
+	r.Use(static.Serve("/", staticFS))
 
 	api := r.Group("/api")
 	{
 		api.GET("/config", getConfigHandler)
-		api.GET("/stats", getStatsHandler) // 新增统计接口
+		api.GET("/stats", getStatsHandler)
 		api.POST("/config", updateConfigHandler)
 		api.GET("/languages", getLanguagesHandler)
 		api.GET("/logs", logStreamHandler)
