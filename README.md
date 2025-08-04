@@ -32,4 +32,4 @@ Deeprotection WebGUI 是一个用于管理Deeprotection的 web 界面工具, 提
 
 ## 许可证
 
-本项目采用 Apache License 2.0 许可证, 详情参见 [LICENSE](release_bin/LICENSE) 文件
+本项目采用 Apache License 2.0 许可证, 详情参见 [LICENSE](https://github.com/Geekstrange/Deeprotection-WebGUI/blob/main/LICENSE) 文件
