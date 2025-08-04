@@ -252,164 +252,173 @@ func updateConfigHandler(c *gin.Context) {
 
 // 解析配置文件
 func parseConfig() (map[string]interface{}, error) {
-	config := make(map[string]interface{})
-	basicConfig := make(map[string]string)
-	protectedPaths := []string{}
-	commandRules := []string{}
+    config := make(map[string]interface{})
+    basicConfig := make(map[string]string)
+    protectedPaths := []string{}
+    commandRules := []string{}
 
-	file, err := os.Open(ConfigPath)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
+    file, err := os.Open(ConfigPath)
+    if err != nil {
+        return nil, err
+    }
+    defer file.Close()
 
-	scanner := bufio.NewScanner(file)
-	currentSection := ""
+    scanner := bufio.NewScanner(file)
+    currentSection := ""
 
-	for scanner.Scan() {
-		line := scanner.Text()
-		trimmed := strings.TrimSpace(line)
+    for scanner.Scan() {
+        line := scanner.Text()
+        trimmed := strings.TrimSpace(line)
 
-		if trimmed == "" {
-			continue
-		}
+        if trimmed == "" {
+            continue
+        }
 
-		if strings.HasPrefix(trimmed, "#---------------------") {
-			currentSection = trimmed
-			continue
-		}
+        // 识别 section 开始: 宽松匹配关键字
+        if strings.Contains(trimmed, "protected_paths_list") {
+            currentSection = "protected_paths_list"
+            continue
+        }
+        if strings.Contains(trimmed, "command_intercept_rules") {
+            currentSection = "command_intercept_rules"
+            continue
+        }
 
-		if strings.Contains(trimmed, "=") && !strings.HasPrefix(trimmed, "#") {
-			parts := strings.SplitN(trimmed, "=", 2)
-			key := strings.TrimSpace(parts[0])
-			value := strings.TrimSpace(parts[1])
+        // 基本配置项 (格式 key=value 且不是注释)
+        if strings.Contains(trimmed, "=") && !strings.HasPrefix(trimmed, "#") {
+            parts := strings.SplitN(trimmed, "=", 2)
+            key := strings.TrimSpace(parts[0])
+            value := strings.TrimSpace(parts[1])
 
-			switch key {
-			case "language", "disable", "expire_hours", "timestamp", "update", "mode", "web_ip", "web_port":
-				basicConfig[key] = value
-			}
-			continue
-		}
+            switch key {
+            case "language", "disable", "expire_hours", "timestamp", "update", "mode", "web_ip", "web_port":
+                basicConfig[key] = value
+            }
+            // 如果在某些 section 也可能含有 = 但你不希望它当作 basic, 可以进一步区分
+            continue
+        }
 
-		if currentSection != "" {
-			if strings.Contains(currentSection, "protected_paths_list") {
-				if !strings.HasPrefix(trimmed, "#") && trimmed != "" {
-					protectedPaths = append(protectedPaths, line)
-				}
-			} else if strings.Contains(currentSection, "command_intercept_rules") {
-				if !strings.HasPrefix(trimmed, "#") && trimmed != "" {
-					commandRules = append(commandRules, line)
-				}
-			}
-		}
-	}
+        // 依据当前 section 追加
+        if currentSection == "protected_paths_list" {
+            if !strings.HasPrefix(trimmed, "#") && trimmed != "" {
+                protectedPaths = append(protectedPaths, trimmed)
+            }
+        } else if currentSection == "command_intercept_rules" {
+            if !strings.HasPrefix(trimmed, "#") && trimmed != "" {
+                commandRules = append(commandRules, trimmed)
+            }
+        }
+    }
 
-	if err := scanner.Err(); err != nil {
-		return nil, err
-	}
+    if err := scanner.Err(); err != nil {
+        return nil, err
+    }
 
-	config["basic"] = basicConfig
-	config["protected_paths"] = protectedPaths
-	config["command_rules"] = commandRules
+    config["basic"] = basicConfig
+    config["protected_paths"] = protectedPaths
+    config["command_rules"] = commandRules
 
-	return config, nil
+    return config, nil
 }
 
 // 更新配置文件
 func updateConfigFile(newConfig map[string]interface{}) error {
-	content, err := os.ReadFile(ConfigPath)
-	if err != nil {
-		return err
-	}
-	lines := strings.Split(string(content), "\n")
+    content, err := os.ReadFile(ConfigPath)
+    if err != nil {
+        return err
+    }
+    lines := strings.Split(string(content), "\n")
 
-	// 更新基本配置项
-	for i, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
-			continue
-		}
+    // 更新基本配置项 (如果提供)
+    if basic, ok := newConfig["basic"].(map[string]interface{}); ok {
+       	for i, line := range lines {
+            trimmed := strings.TrimSpace(line)
+            if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+                continue
+            }
+            if strings.Contains(trimmed, "=") {
+                parts := strings.SplitN(trimmed, "=", 2)
+                key := strings.TrimSpace(parts[0])
+                if newValue, exists := basic[key]; exists {
+                    valueStr := fmt.Sprintf("%v", newValue)
+                    lines[i] = fmt.Sprintf("%s=%s", key, valueStr)
+                }
+            }
+        }
+    }
 
-		if strings.Contains(trimmed, "=") {
-			parts := strings.SplitN(trimmed, "=", 2)
-			key := strings.TrimSpace(parts[0])
+    // Helper to replace or insert a section
+   	replaceSection := func(sectionKey string, newItems []string) {
+        startIdx := -1
+        endIdx := -1
 
-			if basic, ok := newConfig["basic"].(map[string]interface{}); ok {
-				if newValue, ok := basic[key]; ok {
-					// 确保值转换为字符串
-					valueStr := fmt.Sprintf("%v", newValue)
-					lines[i] = fmt.Sprintf("%s=%s", key, valueStr)
-				}
-			}
-		}
-	}
+        // 定位 section 开头 (包含关键字), 例如包含 "protected_paths_list"
+        for i, line := range lines {
+            if strings.Contains(line, sectionKey) {
+                startIdx = i
+                break
+            }
+        }
 
-	protectedStart := -1
-	protectedEnd := -1
-	commandStart := -1
-	commandEnd := -1
+        if startIdx == -1 {
+            // section 不存在, 跳过 (也可以选择插入整个 section 模板)
+           	log.Printf("Warning: section %s not found in config file; skipping update for it", sectionKey)
+            return
+        }
 
-	for i, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.Contains(trimmed, "#protected_paths_list") {
-			protectedStart = i
-		} else if strings.Contains(trimmed, "#command_intercept_rules") {
-			commandStart = i
-		}
+        // 查找下一个显式的 section 开头 (可能是另一个关键字)或文件末尾, 作为 endIdx (不包含它)
+        for i := startIdx + 1; i < len(lines); i++ {
+            if strings.Contains(lines[i], "protected_paths_list") || strings.Contains(lines[i], "command_intercept_rules") {
+                endIdx = i
+                break
+            }
+        }
+        if endIdx == -1 {
+            // 到文件末尾
+            endIdx = len(lines)
+        }
 
-		// 查找下一个分隔符作为结束位置
-		if protectedStart != -1 && protectedEnd == -1 && i > protectedStart && strings.HasPrefix(trimmed, "#---------------------") {
-			protectedEnd = i
-		}
+        // 保留 section header line
+        newSection := []string{lines[startIdx]}
+        // 插入新的内容 (如果有)
+        for _, item := range newItems {
+            newSection = append(newSection, item)
+        }
 
-		if commandStart != -1 && commandEnd == -1 && i > commandStart && strings.HasPrefix(trimmed, "#---------------------") {
-			commandEnd = i
-		}
-	}
+        // 重建 lines: 替换旧 section 内容 (包含旧 items, 但不包括下一个 section header)
+        lines = append(lines[:startIdx], append(newSection, lines[endIdx:]...)...)
+    }
 
-	// 更新受保护路径部分
-	if protectedStart != -1 && protectedEnd != -1 {
-		newProtected := []string{}
-		if paths, ok := newConfig["protected_paths"].([]interface{}); ok {
-			for _, path := range paths {
-				if str, ok := path.(string); ok {
-					newProtected = append(newProtected, str)
-				}
-			}
-		}
+    // 处理 protected_paths
+    if pathsIface, ok := newConfig["protected_paths"].([]interface{}); ok {
+        newPaths := []string{}
+        for _, p := range pathsIface {
+            if str, ok := p.(string); ok {
+                newPaths = append(newPaths, str)
+            }
+        }
+        replaceSection("protected_paths_list", newPaths)
+    }
 
-		// 替换整个部分
-		newSection := []string{lines[protectedStart]}
-		newSection = append(newSection, newProtected...)
-		newSection = append(newSection, lines[protectedEnd])
+    // 处理 command_rules
+    if rulesIface, ok := newConfig["command_rules"].([]interface{}); ok {
+        newRules := []string{}
+        for _, r := range rulesIface {
+            if str, ok := r.(string); ok {
+                newRules = append(newRules, str)
+            }
+        }
+        replaceSection("command_intercept_rules", newRules)
+    }
 
-		// 重建行切片 - 修复语法错误
-		lines = append(lines[:protectedStart], append(newSection, lines[protectedEnd+1:]...)...)
-	}
-
-	// 更新命令规则部分
-	if commandStart != -1 && commandEnd != -1 {
-		newRules := []string{}
-		if rules, ok := newConfig["command_rules"].([]interface{}); ok {
-			for _, rule := range rules {
-				if str, ok := rule.(string); ok {
-					newRules = append(newRules, str)
-				}
-			}
-		}
-
-		// 替换整个部分
-		newSection := []string{lines[commandStart]}
-		newSection = append(newSection, newRules...)
-		newSection = append(newSection, lines[commandEnd])
-
-		// 重建行切片 - 修复语法错误
-		lines = append(lines[:commandStart], append(newSection, lines[commandEnd+1:]...)...)
-	}
-
-	// 写入更新后的配置
-	return os.WriteFile(ConfigPath, []byte(strings.Join(lines, "\n")), 0644)
+    // 写入更新后的配置 (确保以换行结尾)
+   	out := strings.Join(lines, "\n")
+    if !strings.HasSuffix(out, "\n") {
+        out += "\n"
+    }
+    return os.WriteFile(ConfigPath, []byte(out), 0644)
 }
+
 
 // 流式日志
 func logStreamHandler(c *gin.Context) {
@@ -433,7 +442,7 @@ func logStreamHandler(c *gin.Context) {
 		c.Writer.Flush()
 	}
 
-	// 获取当前文件位置（文件末尾）
+	// 获取当前文件位置 (文件末尾)
 	lastPos, _ := file.Seek(0, io.SeekCurrent)
 	lastSize := lastPos
 
@@ -457,7 +466,7 @@ func logStreamHandler(c *gin.Context) {
 
 			currentSize := fileInfo.Size()
 			if currentSize < lastSize {
-				// 文件被截断或轮转，重置位置并重新发送完整日志
+				// 文件被截断或轮转, 重置位置并重新发送完整日志
 				lastPos = 0
 				lastSize = currentSize
 
