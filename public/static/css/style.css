@@ -125,10 +125,6 @@ button {
     transition: background-color 0.3s;
 }
 
-button:hover {
-    background-color: #2980b9;
-}
-
 button#reload-btn {
     background-color: var(--success);
 }
