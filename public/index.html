@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deeprotection WebGUI</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Deeprotection WebGUI</h1>
+            <div class="status">
+                <span id="status-indicator"></span>
+                <span id="status-text">Loading...</span>
+            </div>
+        </header>
+
+        <nav>
+            <ul>
+                <li><a href="#" data-page="dashboard">Dashboard</a></li>
+                <li><a href="#" data-page="config">Configuration</a></li>
+                <li><a href="#" data-page="rules">Protection Rules</a></li>
+                <li><a href="#" data-page="logs">Logs</a></li>
+                <li><a href="#" data-page="tools">Terminal</a></li>
+            </ul>
+        </nav>
+
+        <main>
+			<section id="dashboard" class="page active">
+                <h2>System Overview</h2>
+                <div class="stats">
+                    <div class="stat-card">
+                        <h3>Protection Status</h3>
+                        <p id="protection-status">Loading...</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Expiration</h3>
+                        <p id="expiration-status">Loading...</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Last Updated</h3>
+                        <p id="last-updated">Loading...</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Protection Count</h3>
+                        <p id="protection-count">Loading...</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Update Mode</h3>
+                        <p id="update-mode">Loading...</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Protection Mode</h3>
+                        <p id="protection-mode">Loading...</p>
+                    </div>
+                </div>
+                <div class="actions">
+                    <button id="reload-btn">Reload Configuration</button>
+                    <button id="restart-btn">Restart Service</button>
+                </div>
+            </section>
+
+            <section id="config" class="page">
+                <h2>Basic Configuration</h2>
+                <div class="editor-container">
+                    <div class="form-group">
+                        <label for="language">Language</label>
+                        <select id="language" name="language" class="language-select">
+                            <option value="">Loading languages...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="disable">Disable Protection</label>
+                        <select id="disable" name="disable">
+                            <option value="false">False (Enabled)</option>
+                            <option value="true">True (Disabled)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="expire_hours">Expire Hours</label>
+                        <input type="number" id="expire_hours" name="expire_hours">
+                    </div>
+                    <div class="form-group">
+                        <label for="update">Auto Update</label>
+                        <select id="update" name="update">
+                            <option value="enable">Enabled</option>
+                            <option value="disable">Disabled</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="mode">Protection Mode</label>
+                        <select id="mode" name="mode">
+                            <option value="Permissive">Permissive</option>
+                            <option value="Enhanced">Enhanced</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="web_ip">Web Server IP</label>
+                        <input type="text" id="web_ip" name="web_ip" placeholder="127.0.0.1">
+                    </div>
+                    <div class="form-group">
+                        <label for="web_port">Web Server Port</label>
+                        <input type="number" id="web_port" name="web_port" placeholder="8080">
+                    </div>
+                    <div class="form-actions">
+                        <button id="save-config">Save Configuration</button>
+                    </div>
+                </div>
+            </section>
+
+            <section id="rules" class="page">
+                <h2>Protection Rules</h2>
+
+                <div class="rules-section">
+                    <h3>Protected Paths</h3>
+                    <div class="rules-info">
+                        <p>List of protected paths (one per line):</p>
+                    </div>
+                    <textarea id="protected-paths" rows="5" placeholder="/path/to/protected/directory"></textarea>
+                </div>
+
+                <div class="rules-section">
+                    <h3>Command Intercept Rules</h3>
+                    <div class="rules-info">
+                        <p>Command patterns and their replacements:</p>
+                        <p class="hint">Format: <code>original_command > replacement_command</code></p>
+                    </div>
+                    <textarea id="command-rules" rows="10" placeholder="echo > echo 111 > echo 222\n^:\s*()\s*{\s*:\s*|\s*:\s*&\s*}\s*;\s*: > echo &quot;Detection of Fork Bomb Attack!&quot;"></textarea>
+                </div>
+
+                <div class="form-actions">
+                    <button id="save-rules">Save Rules</button>
+                </div>
+            </section>
+
+            <section id="logs" class="page">
+                <h2>Live Logs</h2>
+                <div class="log-controls">
+                    <button id="pause-logs">Pause</button>
+                    <button id="clear-logs">Clear</button>
+                </div>
+                <div class="log-container">
+                    <pre id="log-output"></pre>
+                </div>
+            </section>
+
+            <section id="tools" class="page">
+                <h2>Terminal</h2>
+                <div class="tool">
+                    <h3>Execute Command</h3>
+                    <div class="command-input">
+                        <input type="text" id="command" placeholder="Enter command...">
+                        <button id="execute-btn">Execute</button>
+                    </div>
+                    <div class="command-output">
+                        <pre id="command-output"></pre>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+			<p class="copyright">Copyright © 2025-%year% Geekstrange. All rights reserved.</p></p>
+        </footer>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
