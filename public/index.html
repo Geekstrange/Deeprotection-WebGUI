@@ -1,11 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Deeprotection WebGUI</title>
+    <link rel="icon" href="/favicon.ico" type="image/x-icon" />
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
+
 <body>
     <div class="container">
         <header>
@@ -27,7 +30,7 @@
         </nav>
 
         <main>
-			<section id="dashboard" class="page active">
+            <section id="dashboard" class="page active">
                 <h2>System Overview</h2>
                 <div class="stats">
                     <div class="stat-card">
@@ -117,7 +120,29 @@
                     <div class="rules-info">
                         <p>List of protected paths (one per line):</p>
                     </div>
-                    <textarea id="protected-paths" rows="5" placeholder="/path/to/protected/directory"></textarea>
+
+                    <div class="table-container">
+                        <table id="pathsTable">
+                            <thead>
+                                <tr>
+                                    <th class="number-cell">#</th>
+                                    <th>Path Rule</th>
+                                    <th class="action-cell">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="protectedPathsBody">
+                                <tr>
+                                    <td class="number-cell">1.</td>
+                                    <td class="path-cell">
+                                        <input type="text" class="path-input" placeholder="Enter a path rule">
+                                    </td>
+                                    <td class="action-cell">
+                                        <button class="action-btn add-btn">Add</button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
 
                 <div class="rules-section">
@@ -126,7 +151,34 @@
                         <p>Command patterns and their replacements:</p>
                         <p class="hint">Format: <code>original_command > replacement_command</code></p>
                     </div>
-                    <textarea id="command-rules" rows="10" placeholder="echo > echo 111 > echo 222\n^:\s*()\s*{\s*:\s*|\s*:\s*&\s*}\s*;\s*: > echo &quot;Detection of Fork Bomb Attack!&quot;"></textarea>
+
+                    <div class="table-container">
+                        <table id="transformTable">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Original</th>
+                                    <th class="arrow-cell">-></th>
+                                    <th>Replace</th>
+                                    <th class="action-cell">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="commandRulesBody">
+                                <tr>
+                                    <td>1</td>
+                                    <td>
+                                        <input type="text" class="original-input" placeholder="Original">
+                                        <div class="error-message">Original cannot be empty</div>
+                                    </td>
+                                    <td class="arrow-cell">></td>
+                                    <td><input type="text" class="replace-input" placeholder="Replace"></td>
+                                    <td class="action-cell">
+                                        <button class="add-btn">Add</button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
 
                 <div class="form-actions">
@@ -161,10 +213,12 @@
         </main>
 
         <footer>
-			<p class="copyright">Copyright © 2025-%year% Geekstrange. All rights reserved.</p></p>
+            <p class="copyright">Copyright © 2025-%year% Geekstrange. All rights reserved.</p>
+            </p>
         </footer>
     </div>
 
     <script src="/static/js/app.js"></script>
 </body>
+
 </html>

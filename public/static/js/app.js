@@ -17,7 +17,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-
     // Copyright info
     document.querySelector('.copyright').textContent = document.querySelector('.copyright').textContent.replace('%year%', new Date().getFullYear());
 
@@ -38,7 +37,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // 新增: 获取统计信息
     async function fetchStats() {
         try {
             const response = await fetch('/api/stats');
@@ -138,7 +136,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ command })
+                body: JSON.stringify({
+                    command
+                })
             });
 
             if (!response.ok) {
@@ -184,27 +184,23 @@ document.addEventListener('DOMContentLoaded', function() {
             protectionStatus.style.color = '#e74c3c';
         }
 
-        // 仅显示最后更新时间
         lastUpdated.textContent = new Date(parseInt(basic.timestamp) * 1000).toLocaleString();
         updateMode.textContent = basic.update === 'enable' ? 'Enabled' : 'Disabled';
         protectionMode.textContent = basic.mode || 'Permissive';
     }
 
-    // 新增: 更新统计信息
     function updateStats(stats) {
         const protectionCount = document.getElementById('protection-count');
         const expirationStatus = document.getElementById('expiration-status');
 
-        // 更新保护次数
         protectionCount.textContent = stats.protection_count;
 
-        // 更新剩余时间或默认禁用时长
         if (stats.remaining_time) {
             expirationStatus.textContent = stats.remaining_time;
-            expirationStatus.style.color = '#e74c3c'; // 红色表示禁用状态
+            expirationStatus.style.color = '#e74c3c';
         } else {
             expirationStatus.textContent = currentConfig.basic.expire_hours + ' hours (default)';
-            expirationStatus.style.color = '#27ae60'; // 绿色表示启用状态
+            expirationStatus.style.color = '#27ae60';
         }
     }
 
@@ -264,14 +260,447 @@ document.addEventListener('DOMContentLoaded', function() {
         currentConfig = await fetchConfig();
         updateStatus(currentConfig);
 
-        // 获取并更新统计信息
         const stats = await fetchStats();
         if (stats) {
             updateStats(stats);
         }
     }
 
-    // 其他初始化函数保持不变...
+    // 配置页面初始化
+    function initConfigPage() {
+        fetchLanguages().then(languages => {
+            populateLanguageSelect(languages);
+        });
+
+        fetchConfig().then(config => {
+            loadConfigToForm(config);
+        });
+
+        document.getElementById('save-config').addEventListener('click', async function() {
+            const basic = {
+                language: document.getElementById('language').value,
+                disable: document.getElementById('disable').value,
+                expire_hours: document.getElementById('expire_hours').value,
+                update: document.getElementById('update').value,
+                mode: document.getElementById('mode').value,
+                web_ip: document.getElementById('web_ip').value,
+                web_port: document.getElementById('web_port').value
+            };
+
+            const configData = {
+                basic: basic
+            };
+
+            const result = await updateConfig(configData);
+            if (result) {
+                showNotification('Configuration saved');
+                currentConfig = await fetchConfig();
+                updateStatus(currentConfig);
+            }
+        });
+    }
+
+    // 规则页面初始化
+    function initRulesPage() {
+        // 初始化保护路径表格
+        initProtectedPathsTable();
+
+        // 初始化命令拦截规则表格
+        initCommandRulesTable();
+
+        // 加载配置到表格
+        fetchConfig().then(config => {
+            if (config) {
+                loadRulesToForm(config);
+            }
+        });
+
+        document.getElementById('save-rules').addEventListener('click', async function() {
+            const protectedPaths = getProtectedPaths();
+            const commandRules = getCommandRules();
+
+            const configData = {
+                protected_paths: protectedPaths,
+                command_rules: commandRules
+            };
+
+            const result = await updateConfig(configData);
+            if (result) {
+                showNotification('Rules saved');
+            }
+        });
+    }
+
+    // 初始化保护路径表格
+    function initProtectedPathsTable() {
+        const tableBody = document.getElementById('protectedPathsBody');
+        let rowCount = 1;
+
+        // 设置行事件处理
+        function setupRowEvents(row) {
+            const input = row.querySelector('.path-input');
+            const button = row.querySelector('.action-btn');
+
+            // 按钮点击事件处理
+            button.addEventListener('click', function() {
+                const content = input.value.trim();
+
+                if (button.classList.contains('add-btn')) {
+                    // 处理Add操作
+                    if (content) {
+                        // 锁定输入框样式
+                        input.classList.add('confirmed');
+                        input.readOnly = true;
+
+                        // 变为Remove按钮
+                        button.classList.remove('add-btn');
+                        button.classList.add('remove-btn');
+                        button.textContent = 'Remove';
+
+                        // 添加新行
+                        addNewEmptyRow();
+                    } else {
+                        alert('Please enter a path rule before adding');
+                    }
+                } else {
+                    // 处理Remove操作
+                    row.remove();
+                    updateRowNumbers();
+                    if (!hasEmptyRow()) {
+                        addNewEmptyRow();
+                    }
+                }
+            });
+        }
+
+        // 检查是否有空行 (即等待输入的行)
+        function hasEmptyRow() {
+            return Array.from(tableBody.querySelectorAll('tr')).some(row => {
+                const input = row.querySelector('.path-input');
+                const button = row.querySelector('.action-btn');
+                return !input.classList.contains('confirmed') &&
+                    button.classList.contains('add-btn');
+            });
+        }
+
+        // 创建新的空行
+        function addNewEmptyRow() {
+            const newRow = document.createElement('tr');
+            const newRowNum = ++rowCount;
+
+            // 序号单元格
+            const numberCell = document.createElement('td');
+            numberCell.className = 'number-cell';
+            numberCell.textContent = `${newRowNum}.`;
+
+            // 路径内容单元格
+            const pathCell = document.createElement('td');
+            pathCell.className = 'path-cell';
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'path-input';
+            input.placeholder = 'Enter a path rule';
+            pathCell.appendChild(input);
+
+            // 操作单元格 (添加按钮)
+            const actionCell = document.createElement('td');
+            actionCell.className = 'action-cell';
+            const button = document.createElement('button');
+            button.className = 'action-btn add-btn';
+            button.textContent = 'Add';
+            actionCell.appendChild(button);
+
+            // 组装行
+            newRow.appendChild(numberCell);
+            newRow.appendChild(pathCell);
+            newRow.appendChild(actionCell);
+
+            // 添加到表格容器
+            tableBody.appendChild(newRow);
+
+            // 绑定事件
+            setupRowEvents(newRow);
+        }
+
+        // 更新行号函数
+        function updateRowNumbers() {
+            const rows = Array.from(tableBody.querySelectorAll('tr'));
+            rowCount = rows.length;
+
+            rows.forEach((row, index) => {
+                const numberCell = row.querySelector('.number-cell');
+                if (numberCell) {
+                    numberCell.textContent = `${index + 1}.`;
+                }
+            });
+        }
+
+        // 设置初始行的监听器
+        const initialRow = tableBody.querySelector('tr');
+        if (initialRow) {
+            setupRowEvents(initialRow);
+        }
+    }
+
+    // 初始化命令拦截规则表格
+    function initCommandRulesTable() {
+        const tableBody = document.getElementById('commandRulesBody');
+        let rowCount = 1;
+
+        // 设置行事件处理
+        function setupRowEvents(row) {
+            const originalInput = row.querySelector('.original-input');
+            const replaceInput = row.querySelector('.replace-input');
+            const button = row.querySelector('button');
+            const errorMessage = row.querySelector('.error-message');
+
+            // 按钮点击事件处理
+            button.addEventListener('click', function() {
+                if (button.classList.contains('add-btn')) {
+                    // 处理Add操作
+                    if (!originalInput.value.trim()) {
+                        originalInput.classList.add('original-required');
+                        errorMessage.style.display = 'block';
+                        return;
+                    }
+
+                    // 锁定输入框样式
+                    row.classList.add('confirmed');
+                    originalInput.readOnly = true;
+                    replaceInput.readOnly = true;
+
+                    // 变为Remove按钮
+                    button.classList.remove('add-btn');
+                    button.classList.add('remove-btn');
+                    button.textContent = 'Remove';
+
+                    // 添加新行
+                    addNewEmptyRow();
+                } else {
+                    // 处理Remove操作
+                    row.remove();
+                    updateRowNumbers();
+                }
+            });
+
+            // 输入验证
+            originalInput.addEventListener('input', function() {
+                if (this.value.trim()) {
+                    this.classList.remove('original-required');
+                    errorMessage.style.display = 'none';
+                }
+            });
+        }
+
+        // 创建新的空行
+        function addNewEmptyRow() {
+            const newRow = document.createElement('tr');
+            rowCount++;
+
+            newRow.innerHTML = `
+            <td>${rowCount}</td>
+            <td>
+                <input type="text" class="original-input" placeholder="Original">
+                <div class="error-message">Original cannot be empty</div>
+            </td>
+            <td class="arrow-cell">></td>
+            <td><input type="text" class="replace-input" placeholder="Replace"></td>
+            <td class="action-cell">
+                <button class="add-btn">Add</button>
+            </td>
+        `;
+
+            tableBody.appendChild(newRow);
+            setupRowEvents(newRow);
+        }
+
+        // 更新行号函数
+        function updateRowNumbers() {
+            const rows = tableBody.querySelectorAll('tr');
+            rowCount = rows.length;
+
+            rows.forEach((row, index) => {
+                row.cells[0].textContent = index + 1;
+            });
+        }
+
+        // 设置初始行的监听器
+        const initialRow = tableBody.querySelector('tr');
+        if (initialRow) {
+            setupRowEvents(initialRow);
+        }
+    }
+
+    // 从保护路径表格获取数据
+    function getProtectedPaths() {
+        const paths = [];
+        const rows = document.querySelectorAll('#protectedPathsBody tr');
+
+        rows.forEach(row => {
+            const input = row.querySelector('.path-input');
+            if (input && input.value.trim()) {
+                paths.push(input.value.trim());
+            }
+        });
+
+        return paths;
+    }
+
+    // 从命令拦截规则表格获取数据
+    function getCommandRules() {
+        const rules = [];
+        const rows = document.querySelectorAll('#commandRulesBody tr');
+
+        rows.forEach(row => {
+            const originalInput = row.querySelector('.original-input');
+            const replaceInput = row.querySelector('.replace-input');
+
+            if (originalInput && originalInput.value.trim()) {
+                const rule = `${originalInput.value.trim()} > ${replaceInput.value.trim() || originalInput.value.trim()}`;
+                rules.push(rule);
+            }
+        });
+
+        return rules;
+    }
+
+    // 加载规则到表格
+    function loadRulesToForm(config) {
+        if (!config) return;
+
+        // 清空现有表格数据
+        document.getElementById('protectedPathsBody').innerHTML = '';
+        document.getElementById('commandRulesBody').innerHTML = '';
+
+        // 加载保护路径
+        if (config.protected_paths) {
+            config.protected_paths.forEach((path, index) => {
+                if (!path) return;
+
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                <td class="number-cell">${index + 1}.</td>
+                <td class="path-cell">
+                    <input type="text" class="path-input confirmed" value="${path}" readonly>
+                </td>
+                <td class="action-cell">
+                    <button class="action-btn remove-btn">Remove</button>
+                </td>
+            `;
+                document.getElementById('protectedPathsBody').appendChild(row);
+            });
+        }
+
+        // 添加一个空行用于新输入
+        const emptyPathRow = document.createElement('tr');
+        emptyPathRow.innerHTML = `
+        <td class="number-cell">${(config.protected_paths?.length || 0) + 1}.</td>
+        <td class="path-cell">
+            <input type="text" class="path-input" placeholder="Enter a path rule">
+        </td>
+        <td class="action-cell">
+            <button class="action-btn add-btn">Add</button>
+        </td>
+    `;
+        document.getElementById('protectedPathsBody').appendChild(emptyPathRow);
+        initProtectedPathsTable();
+
+        // 加载命令拦截规则
+        if (config.command_rules) {
+            config.command_rules.forEach((rule, index) => {
+                if (!rule) return;
+
+                const [original, replacement] = rule.split('>').map(s => s.trim());
+
+                const row = document.createElement('tr');
+                row.classList.add('confirmed');
+                row.innerHTML = `
+                <td>${index + 1}</td>
+                <td>
+                    <input type="text" class="original-input" value="${original || ''}" readonly>
+                </td>
+                <td class="arrow-cell">></td>
+                <td><input type="text" class="replace-input" value="${replacement || ''}" readonly></td>
+                <td class="action-cell">
+                    <button class="remove-btn">Remove</button>
+                </td>
+            `;
+                document.getElementById('commandRulesBody').appendChild(row);
+            });
+        }
+
+        // 添加一个空行用于新输入
+        const emptyCommandRow = document.createElement('tr');
+        emptyCommandRow.innerHTML = `
+        <td>${(config.command_rules?.length || 0) + 1}</td>
+        <td>
+            <input type="text" class="original-input" placeholder="Original">
+            <div class="error-message">Original cannot be empty</div>
+        </td>
+        <td class="arrow-cell">></td>
+        <td><input type="text" class="replace-input" placeholder="Replace"></td>
+        <td class="action-cell">
+            <button class="add-btn">Add</button>
+        </td>
+    `;
+        document.getElementById('commandRulesBody').appendChild(emptyCommandRow);
+        initCommandRulesTable();
+    }
+
+    // 日志页面初始化
+    function initLogsPage() {
+        const logOutput = document.getElementById('log-output');
+        const pauseBtn = document.getElementById('pause-logs');
+        const clearBtn = document.getElementById('clear-logs');
+        let paused = false;
+
+        // 日志流 - 监听 "log" 事件
+        const eventSource = new EventSource('/api/logs');
+
+        eventSource.addEventListener('log', function(event) {
+            if (paused) return;
+            if (event.data) {
+                logOutput.textContent += event.data + '\n';
+                logOutput.scrollTop = logOutput.scrollHeight;
+            }
+        });
+
+        eventSource.addEventListener('error', function(event) {
+            logOutput.textContent += '[ERROR] ' + event.data + '\n';
+            logOutput.scrollTop = logOutput.scrollHeight;
+        });
+
+        pauseBtn.addEventListener('click', function() {
+            paused = !paused;
+            this.textContent = paused ? 'Resume' : 'Pause';
+        });
+
+        clearBtn.addEventListener('click', function() {
+            logOutput.textContent = '';
+        });
+    }
+
+    // 工具页面初始化
+    function initToolsPage() {
+        const commandInput = document.getElementById('command');
+        const executeBtn = document.getElementById('execute-btn');
+        const commandOutput = document.getElementById('command-output');
+
+        executeBtn.addEventListener('click', async function() {
+            if (!commandInput.value.trim()) return;
+
+            const result = await executeCommand(commandInput.value);
+            if (result) {
+                commandOutput.textContent = result.output;
+            }
+        });
+
+        commandInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                executeBtn.click();
+            }
+        });
+    }
 
     // 定期刷新仪表盘
     setInterval(async () => {
@@ -281,7 +710,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 updateStats(stats);
             }
         }
-    }, 5000); // 每5秒刷新一次
+    }, 5000);
 
     // 初始化所有页面
     initDashboard();
@@ -290,12 +719,12 @@ document.addEventListener('DOMContentLoaded', function() {
     initLogsPage();
     initToolsPage();
 
-    // Setup action buttons
+    // 操作按钮
     document.getElementById('reload-btn').addEventListener('click', async function() {
         const result = await reloadService();
         if (result) {
             showNotification('Configuration reloaded');
-            initDashboard(); // Refresh status
+            initDashboard();
         }
     });
 
@@ -303,124 +732,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const result = await restartService();
         if (result) {
             showNotification('Service restarted');
-            initDashboard(); // Refresh status
+            initDashboard();
         }
     });
-	// 在文件末尾添加以下函数实现
-function initConfigPage() {
-    // 获取语言列表并填充下拉框
-    fetchLanguages().then(languages => {
-        populateLanguageSelect(languages);
-    });
-
-    // 加载配置到表单
-    fetchConfig().then(config => {
-        loadConfigToForm(config);
-    });
-
-    // 保存配置按钮事件
-    document.getElementById('save-config').addEventListener('click', async function() {
-        const basic = {
-            language: document.getElementById('language').value,
-            disable: document.getElementById('disable').value,
-            expire_hours: document.getElementById('expire_hours').value,
-            update: document.getElementById('update').value,
-            mode: document.getElementById('mode').value,
-            web_ip: document.getElementById('web_ip').value,
-            web_port: document.getElementById('web_port').value
-        };
-
-        const configData = {
-            basic: basic
-        };
-
-        const result = await updateConfig(configData);
-        if (result) {
-            showNotification('Configuration saved');
-            // 更新当前配置
-            currentConfig = await fetchConfig();
-            updateStatus(currentConfig);
-        }
-    });
-}
-
-// 规则页面初始化
-function initRulesPage() {
-    fetchConfig().then(config => {
-        loadRulesToForm(config);
-    });
-
-    // 保存规则按钮事件
-    document.getElementById('save-rules').addEventListener('click', async function() {
-        const protectedPaths = document.getElementById('protected-paths').value.split('\n');
-        const commandRules = document.getElementById('command-rules').value.split('\n');
-
-        const configData = {
-            protected_paths: protectedPaths,
-            command_rules: commandRules
-        };
-
-        const result = await updateConfig(configData);
-        if (result) {
-            showNotification('Rules saved');
-        }
-    });
-}
-
-// 日志页面初始化
-function initLogsPage() {
-    const logOutput = document.getElementById('log-output');
-    const pauseBtn = document.getElementById('pause-logs');
-    const clearBtn = document.getElementById('clear-logs');
-    let paused = false;
-
-    // 日志流
-    const eventSource = new EventSource('/api/logs');
-
-    eventSource.onmessage = function(event) {
-        if (paused) return;
-
-        if (event.data) {
-            logOutput.textContent += event.data + '\n';
-            // 自动滚动到底部
-            logOutput.scrollTop = logOutput.scrollHeight;
-        }
-    };
-
-    eventSource.onerror = function(err) {
-        console.error('EventSource error:', err);
-        eventSource.close();
-    };
-
-    pauseBtn.addEventListener('click', function() {
-        paused = !paused;
-        this.textContent = paused ? 'Resume' : 'Pause';
-    });
-
-    clearBtn.addEventListener('click', function() {
-        logOutput.textContent = '';
-    });
-}
-
-// 工具页面初始化
-function initToolsPage() {
-    const commandInput = document.getElementById('command');
-    const executeBtn = document.getElementById('execute-btn');
-    const commandOutput = document.getElementById('command-output');
-
-    executeBtn.addEventListener('click', async function() {
-        if (!commandInput.value.trim()) return;
-
-        const result = await executeCommand(commandInput.value);
-        if (result) {
-            commandOutput.textContent = result.output;
-        }
-    });
-
-    commandInput.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            executeBtn.click();
-        }
-    });
-}
 });
