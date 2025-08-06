@@ -651,12 +651,28 @@ document.addEventListener('DOMContentLoaded', function() {
         return rules;
     }
 
+    // 播放提示音函数
+    function playNotificationSound() {
+        try {
+            const audio = new Audio('/msg.mp3');
+            audio.volume = 0.5; // 设置音量为50%
+            audio.play().catch(error => {
+                console.log('Notification playback failed:', error);
+                // 播放失败时不做处理, 避免影响主要功能
+            });
+        } catch (error) {
+            console.log('Notification initialization failed:', error);
+        }
+    }
+
     // 日志页面初始化
     function initLogsPage() {
         const logOutput = document.getElementById('log-output');
         const pauseBtn = document.getElementById('pause-logs');
         const clearBtn = document.getElementById('clear-logs');
         let paused = false;
+        // 记录日志流连接建立的时间, 用于过滤历史日志
+        const logStreamStartTime = new Date();
 
         // 日志流 - 监听 "log" 事件
         const eventSource = new EventSource('/api/logs');
@@ -667,8 +683,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 logOutput.textContent += event.data + '\n';
                 logOutput.scrollTop = logOutput.scrollHeight;
 
-                // 显示新日志通知
-                showLogNotification(event.data);
+                // 解析日志中的时间戳 (格式: 2025-08-04 13:55:21)
+                const logTimeStr = event.data.substring(0, 19).trim();
+                const logTime = new Date(logTimeStr);
+
+                // 只对页面加载后生成的日志显示通知
+                if (logTime >= logStreamStartTime) {
+                    showLogNotification(event.data);
+                    playNotificationSound(); // 播放提示音
+                }
             }
         });
 
