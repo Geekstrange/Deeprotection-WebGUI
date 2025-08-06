@@ -231,11 +231,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (!path) return;
 
                 const row = document.createElement('tr');
-                row.classList.add('confirmed');
                 row.innerHTML = `
                 <td class="number-cell">${index + 1}.</td>
                 <td class="path-cell">
-                    <input type="text" class="path-input" value="${path}" readonly>
+                    <input type="text" class="path-input confirmed" value="${path}" readonly>
                 </td>
                 <td class="action-cell">
                     <button class="action-btn remove-btn">Remove</button>
@@ -399,18 +398,13 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // 初始化保护路径表格 - 修复版
+    // 修复后的初始化保护路径表格
     function initProtectedPathsTable() {
         const tableBody = document.getElementById('protectedPathsBody');
 
-        // 移除现有事件监听器, 避免重复绑定
-        const newTableBody = tableBody.cloneNode(true);
-        tableBody.parentNode.replaceChild(newTableBody, tableBody);
-        const freshTableBody = document.getElementById('protectedPathsBody');
-
         // 重排行号
         function updateRowNumbers() {
-            const rows = freshTableBody.querySelectorAll('tr');
+            const rows = tableBody.querySelectorAll('tr');
             rows.forEach((row, idx) => {
                 const numCell = row.querySelector('.number-cell');
                 if (numCell) {
@@ -419,148 +413,110 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
 
-        // 检查是否存在空白行
-        function hasEmptyPathRow() {
-            const rows = freshTableBody.querySelectorAll('tr');
-            for (const row of rows) {
-                if (!row.classList.contains('confirmed')) {
-                    return true;
-                }
-            }
-            return false;
+        // 检查是否有空行 (即等待输入的行)
+        function hasEmptyRow() {
+            return Array.from(tableBody.querySelectorAll('tr')).some(row => {
+                const input = row.querySelector('.path-input');
+                const button = row.querySelector('.action-btn');
+                return !input.classList.contains('confirmed') &&
+                    button.classList.contains('add-btn');
+            });
         }
 
-        // 创建并绑定一个新的空行
-        function addEmptyRow() {
-            const index = freshTableBody.querySelectorAll('tr').length + 1;
-            const row = document.createElement('tr');
-            row.innerHTML = `
-            <td class="number-cell">${index}.</td>
-            <td class="path-cell">
-                <input type="text" class="path-input" placeholder="Enter a path rule">
-                <div class="error-message">Path cannot be empty</div>
-            </td>
-            <td class="action-cell">
-                <button class="action-btn add-btn">Add</button>
-            </td>
-        `;
-            freshTableBody.appendChild(row);
+        // 创建新的空行
+        function addNewEmptyRow() {
+            const newRow = document.createElement('tr');
+
+            // 序号单元格
+            const numberCell = document.createElement('td');
+            numberCell.className = 'number-cell';
+            numberCell.textContent = `${tableBody.querySelectorAll('tr').length + 1}.`;
+
+            // 路径内容单元格
+            const pathCell = document.createElement('td');
+            pathCell.className = 'path-cell';
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'path-input';
+            input.placeholder = 'Enter a path rule';
+            pathCell.appendChild(input);
+
+            // 操作单元格 (添加按钮)
+            const actionCell = document.createElement('td');
+            actionCell.className = 'action-cell';
+            const button = document.createElement('button');
+            button.className = 'action-btn add-btn';
+            button.textContent = 'Add';
+            actionCell.appendChild(button);
+
+            // 组装行
+            newRow.appendChild(numberCell);
+            newRow.appendChild(pathCell);
+            newRow.appendChild(actionCell);
+
+            // 添加到表格容器
+            tableBody.appendChild(newRow);
+
+            // 绑定事件
+            setupRowEvents(newRow);
+
+            // 更新行号
             updateRowNumbers();
         }
 
-        // 设置单行事件
+        // 设置行事件处理
         function setupRowEvents(row) {
             const input = row.querySelector('.path-input');
-            const button = row.querySelector('.action-btn');
-            const errorMessage = row.querySelector('.error-message');
+            let button = row.querySelector('.action-btn');
 
-            // 按钮点击事件处理 (Add / Remove)
+            // 移除之前的事件监听器, 防止重复绑定
+            if (button) {
+                const newButton = button.cloneNode(true);
+                button.parentNode.replaceChild(newButton, button);
+                button = newButton;
+            }
+
+            // 按钮点击事件处理
             button.addEventListener('click', function() {
+                const content = input.value.trim();
+
                 if (button.classList.contains('add-btn')) {
-                    // Add 操作
-                    if (!input.value.trim()) {
-                        input.classList.add('path-required');
-                        if (errorMessage) errorMessage.style.display = 'block';
-                        return;
-                    }
+                    // 处理Add操作
+                    if (content) {
+                        // 锁定输入框样式
+                        input.classList.add('confirmed');
+                        input.readOnly = true;
 
-                    // 锁定输入框并标记已确认
-                    row.classList.add('confirmed');
-                    input.readOnly = true;
+                        // 变为Remove按钮
+                        button.classList.remove('add-btn');
+                        button.classList.add('remove-btn');
+                        button.textContent = 'Remove';
 
-                    // 替换按钮状态
-                    button.classList.remove('add-btn');
-                    button.classList.add('remove-btn');
-                    button.textContent = 'Remove';
-
-                    // 添加新空行 (如果当前已经没有空行)
-                    if (!hasEmptyPathRow()) {
-                        addEmptyRow();
+                        // 添加新行
+                        addNewEmptyRow();
+                    } else {
+                        alert('Please enter a path rule before adding');
                     }
                 } else {
-                    // Remove 操作
+                    // 处理Remove操作
                     row.remove();
                     updateRowNumbers();
-                    if (!hasEmptyPathRow()) {
-                        addEmptyRow();
+                    if (!hasEmptyRow()) {
+                        addNewEmptyRow();
                     }
-                }
-            });
-
-            // 输入变化处理: 清除错误样式
-            input.addEventListener('input', function() {
-                if (this.value.trim()) {
-                    this.classList.remove('path-required');
-                    if (errorMessage) errorMessage.style.display = 'none';
                 }
             });
         }
 
-        // 使用事件委托处理所有行的事件, 解决动态添加行的事件绑定问题
-        freshTableBody.addEventListener('click', function(e) {
-            const button = e.target.closest('.action-btn');
-            if (!button) return;
-
-            const row = button.closest('tr');
-            if (!row) return;
-
-            const input = row.querySelector('.path-input');
-            const errorMessage = row.querySelector('.error-message');
-
-            if (button.classList.contains('add-btn')) {
-                // Add 操作
-                if (!input.value.trim()) {
-                    input.classList.add('path-required');
-                    if (errorMessage) errorMessage.style.display = 'block';
-                    return;
-                }
-
-                // 锁定输入框并标记已确认
-                row.classList.add('confirmed');
-                input.readOnly = true;
-
-                // 替换按钮状态
-                button.classList.remove('add-btn');
-                button.classList.add('remove-btn');
-                button.textContent = 'Remove';
-
-                // 添加新空行 (如果当前已经没有空行)
-                if (!hasEmptyPathRow()) {
-                    addEmptyRow();
-                }
-            } else if (button.classList.contains('remove-btn')) {
-                // Remove 操作
-                row.remove();
-                updateRowNumbers();
-                if (!hasEmptyPathRow()) {
-                    addEmptyRow();
-                }
-            }
-        });
-
-        // 输入变化处理: 清除错误样式
-        freshTableBody.addEventListener('input', function(e) {
-            const input = e.target.closest('.path-input');
-            if (!input) return;
-
-            const row = input.closest('tr');
-            const errorMessage = row.querySelector('.error-message');
-
-            if (input.value.trim()) {
-                input.classList.remove('path-required');
-                if (errorMessage) errorMessage.style.display = 'none';
-            }
-        });
-
         // 初始化已有行
-        const existingRows = freshTableBody.querySelectorAll('tr');
+        const existingRows = tableBody.querySelectorAll('tr');
         existingRows.forEach(r => {
             setupRowEvents(r);
         });
 
         // 确保有一个空行
-        if (!hasEmptyPathRow()) {
-            addEmptyRow();
+        if (!hasEmptyRow()) {
+            addNewEmptyRow();
         }
     }
 
@@ -568,14 +524,9 @@ document.addEventListener('DOMContentLoaded', function() {
     function initCommandRulesTable() {
         const tableBody = document.getElementById('commandRulesBody');
 
-        // 移除现有事件监听器, 避免重复绑定
-        const newTableBody = tableBody.cloneNode(true);
-        tableBody.parentNode.replaceChild(newTableBody, tableBody);
-        const freshTableBody = document.getElementById('commandRulesBody');
-
         // 重排行号
         function updateRowNumbers() {
-            const rows = freshTableBody.querySelectorAll('tr');
+            const rows = tableBody.querySelectorAll('tr');
             rows.forEach((row, idx) => {
                 const numCell = row.querySelector('td');
                 if (numCell) {
@@ -584,9 +535,9 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
 
-        // 检查是否存在空白行
+        // 检查是否存在空白 (即还没添加的)行
         function hasEmptyCommandRow() {
-            const rows = freshTableBody.querySelectorAll('tr');
+            const rows = tableBody.querySelectorAll('tr');
             for (const row of rows) {
                 if (!row.classList.contains('confirmed')) {
                     return true;
@@ -597,7 +548,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // 创建并绑定一个新的空行
         function addEmptyRow() {
-            const index = freshTableBody.querySelectorAll('tr').length + 1;
+            const index = tableBody.querySelectorAll('tr').length + 1;
             const row = document.createElement('tr');
             row.innerHTML = `
             <td>${index}</td>
@@ -611,8 +562,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 <button class="add-btn">Add</button>
             </td>
         `;
-            freshTableBody.appendChild(row);
-            updateRowNumbers();
+            tableBody.appendChild(row);
+            setupRowEvents(row);
         }
 
         // 设置单行事件
@@ -656,7 +607,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
 
-            // 输入变化处理: 清除错误样式
+            // 输入变化处理: 仅用于清除错误样式
             originalInput.addEventListener('input', function() {
                 if (this.value.trim()) {
                     this.classList.remove('original-required');
@@ -665,71 +616,11 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
 
-        // 使用事件委托处理所有行的事件
-        freshTableBody.addEventListener('click', function(e) {
-            const button = e.target.closest('button');
-            if (!button) return;
-
-            const row = button.closest('tr');
-            if (!row) return;
-
-            const originalInput = row.querySelector('.original-input');
-            const replaceInput = row.querySelector('.replace-input');
-            const errorMessage = row.querySelector('.error-message');
-
-            if (button.classList.contains('add-btn')) {
-                // Add 操作
-                if (!originalInput.value.trim()) {
-                    originalInput.classList.add('original-required');
-                    errorMessage.style.display = 'block';
-                    return;
-                }
-
-                // 锁定输入框并标记已确认
-                row.classList.add('confirmed');
-                originalInput.readOnly = true;
-                replaceInput.readOnly = true;
-
-                // 替换按钮状态
-                button.classList.remove('add-btn');
-                button.classList.add('remove-btn');
-                button.textContent = 'Remove';
-
-                // 添加新空行
-                if (!hasEmptyCommandRow()) {
-                    addEmptyRow();
-                }
-            } else if (button.classList.contains('remove-btn')) {
-                // Remove 操作
-                row.remove();
-                updateRowNumbers();
-                if (!hasEmptyCommandRow()) {
-                    addEmptyRow();
-                }
-            }
-        });
-
-        // 输入变化处理: 清除错误样式
-        freshTableBody.addEventListener('input', function(e) {
-            const input = e.target.closest('.original-input');
-            if (!input) return;
-
-            const row = input.closest('tr');
-            const errorMessage = row.querySelector('.error-message');
-
-            if (input.value.trim()) {
-                input.classList.remove('original-required');
-                errorMessage.style.display = 'none';
-            }
-        });
-
-        // 初始化已有行
-        const existingRows = freshTableBody.querySelectorAll('tr');
+        // 初始化已有行 (包括历史加载的 confirmed 规则)和确保有一个空行
+        const existingRows = tableBody.querySelectorAll('tr');
         existingRows.forEach(r => {
             setupRowEvents(r);
         });
-
-        // 确保有一个空行
         if (!hasEmptyCommandRow()) {
             addEmptyRow();
         }
