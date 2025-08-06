@@ -364,3 +364,37 @@ th {
     background-color: #f8fff0;
     border-color: #a5d6a7;
 }
+
+/* 警告横幅样式*/
+.warning-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    padding: 15px 20px;
+    background-color: #ff4444;
+    color: white;
+    text-align: center;
+    font-size: 16px;
+    font-weight: bold;
+    z-index: 1000;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+@keyframes blink {
+    0%, 100% {
+        background-color: #ff0000;
+        box-shadow: 0 0 15px rgba(255, 0, 0, 0.8);
+    }
+    50% {
+        background-color: #ff6666;
+        box-shadow: 0 0 25px rgba(255, 0, 0, 1);
+    }
+}
+
+.blinking {
+    animation: blink 1s linear infinite;
+}
