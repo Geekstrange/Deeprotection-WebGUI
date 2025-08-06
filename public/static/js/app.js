@@ -563,7 +563,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const errorMessage = row.querySelector('.error-message');
 
             // 按钮点击事件处理 (Add / Remove)
-            button.addEventListener('click', function () {
+            button.addEventListener('click', function() {
                 if (button.classList.contains('add-btn')) {
                     // Add 操作
                     if (!originalInput.value.trim()) {
@@ -597,7 +597,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
 
             // 输入变化处理: 仅用于清除错误样式
-            originalInput.addEventListener('input', function () {
+            originalInput.addEventListener('input', function() {
                 if (this.value.trim()) {
                     this.classList.remove('original-required');
                     errorMessage.style.display = 'none';
@@ -666,8 +666,45 @@ document.addEventListener('DOMContentLoaded', function() {
             if (event.data) {
                 logOutput.textContent += event.data + '\n';
                 logOutput.scrollTop = logOutput.scrollHeight;
+
+                // 显示新日志通知
+                showLogNotification(event.data);
             }
         });
+
+        // 添加日志通知函数
+        function showLogNotification(message) {
+            const container = document.getElementById('notificationContainer');
+
+            // 如果容器不存在则创建
+            if (!container) {
+                const containerDiv = document.createElement('div');
+                containerDiv.id = 'notificationContainer';
+                containerDiv.className = 'notification-container';
+                document.body.appendChild(containerDiv);
+            }
+
+            const notification = document.createElement('div');
+            notification.className = 'notification msg';
+            notification.innerHTML = `
+        <div class="notification-content">${message}</div>
+        <button class="notification-close" onclick="this.parentElement.remove()">×</button>
+    `;
+
+            document.getElementById('notificationContainer').appendChild(notification);
+
+            // 添加动画类
+            setTimeout(() => {
+                notification.style.animation = 'slideIn 0.5s forwards, fadeOut 0.5s forwards 4.5s';
+            }, 10);
+
+            // 5秒后自动移除
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.remove();
+                }
+            }, 5000);
+        }
 
         eventSource.addEventListener('error', function(event) {
             logOutput.textContent += '[ERROR] ' + event.data + '\n';
@@ -685,74 +722,76 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // 工具页面初始化
-	function initToolsPage() {
-    const commandInput = document.getElementById('command');
-    const executeBtn = document.getElementById('execute-btn');
-    const commandOutput = document.getElementById('command-output');
-    const toolsPage = document.getElementById('tools');
+    function initToolsPage() {
+        const commandInput = document.getElementById('command');
+        const executeBtn = document.getElementById('execute-btn');
+        const commandOutput = document.getElementById('command-output');
+        const toolsPage = document.getElementById('tools');
 
-    // 创建并显示警告横幅
-    function showWarningBanner() {
-        // 检查横幅是否已存在
-        if (document.querySelector('.warning-banner')) return;
+        // 创建并显示警告横幅
+        function showWarningBanner() {
+            // 检查横幅是否已存在
+            if (document.querySelector('.warning-banner')) return;
 
-        // 创建横幅元素
-        const banner = document.createElement('div');
-        banner.className = 'warning-banner blinking';
-        banner.innerHTML = '<span>[ ! ] WARNING:This is the native shell.</span>';
+            // 创建横幅元素
+            const banner = document.createElement('div');
+            banner.className = 'warning-banner blinking';
+            banner.innerHTML = '<span>[ ! ] WARNING:This is the native shell.</span>';
 
-        // 添加到页面
-        document.body.prepend(banner);
+            // 添加到页面
+            document.body.prepend(banner);
 
-        // 5秒后自动关闭
-        setTimeout(() => {
-            if (banner && banner.style.display !== 'none') {
-                banner.style.transition = 'opacity 0.5s ease';
-                banner.style.opacity = '0';
-                setTimeout(() => {
-                    if (banner && banner.parentNode) {
-                        banner.parentNode.removeChild(banner);
-                    }
-                }, 500);
-            }
-        }, 5000);
-    }
-
-    // 监听Terminal页面激活状态变化
-    const observer = new MutationObserver((mutations) => {
-        mutations.forEach(mutation => {
-            if (mutation.attributeName === 'class') {
-                if (toolsPage.classList.contains('active')) {
-                    showWarningBanner();
+            // 5秒后自动关闭
+            setTimeout(() => {
+                if (banner && banner.style.display !== 'none') {
+                    banner.style.transition = 'opacity 0.5s ease';
+                    banner.style.opacity = '0';
+                    setTimeout(() => {
+                        if (banner && banner.parentNode) {
+                            banner.parentNode.removeChild(banner);
+                        }
+                    }, 500);
                 }
+            }, 5000);
+        }
+
+        // 监听Terminal页面激活状态变化
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach(mutation => {
+                if (mutation.attributeName === 'class') {
+                    if (toolsPage.classList.contains('active')) {
+                        showWarningBanner();
+                    }
+                }
+            });
+        });
+
+        // 观察页面是否被激活
+        observer.observe(toolsPage, {
+            attributes: true
+        });
+
+        // 初始加载时如果Terminal是激活状态, 显示横幅
+        if (toolsPage.classList.contains('active')) {
+            showWarningBanner();
+        }
+
+        // 原有命令执行逻辑保持不变
+        executeBtn.addEventListener('click', async function() {
+            if (!commandInput.value.trim()) return;
+
+            const result = await executeCommand(commandInput.value);
+            if (result) {
+                commandOutput.textContent = result.output;
             }
         });
-    });
 
-    // 观察页面是否被激活
-    observer.observe(toolsPage, { attributes: true });
-
-    // 初始加载时如果Terminal是激活状态, 显示横幅
-    if (toolsPage.classList.contains('active')) {
-        showWarningBanner();
+        commandInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                executeBtn.click();
+            }
+        });
     }
-
-    // 原有命令执行逻辑保持不变
-    executeBtn.addEventListener('click', async function() {
-        if (!commandInput.value.trim()) return;
-
-        const result = await executeCommand(commandInput.value);
-        if (result) {
-            commandOutput.textContent = result.output;
-        }
-    });
-
-    commandInput.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            executeBtn.click();
-        }
-    });
-}
 
     // 定期刷新仪表盘
     setInterval(async () => {
