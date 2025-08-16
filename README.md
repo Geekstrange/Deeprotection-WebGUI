@@ -24,6 +24,9 @@ The configuration file is located at `/etc/deeprotection/deeprotection.conf` and
 
 - `web_ip`: The IP address the web service binds to.
 - `web_port`: The port the web service listens on.
+- `web_auth`: Web authentication type (empty for no auth, "password" for password auth, "totp" for TOTP auth)
+- `web_password`: Password for password authentication (required if web_auth=password)
+- `web_totp_secret`: TOTP secret key (required if web_auth=totp)
 - `language`: UI language setting.
 - `disable`: Whether to disable protection.
 - `expire_hours`: Protection disable expiration time (in hours).
